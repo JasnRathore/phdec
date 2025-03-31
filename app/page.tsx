@@ -1,11 +1,29 @@
 'use client'
+
 import { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import { HexColorPicker } from 'react-colorful';
 import Head from 'next/head';
 
-// Expanded pH color map with more precise values and descriptions
-const pHColorMap = [
+// Define types for our pH data
+type pHColor = {
+  pH: number;
+  color: string;
+  description: string;
+};
+
+type pHExample = {
+  pH: number;
+  example: string;
+};
+
+// Define accepted file types
+const acceptedFileTypes: Accept = {
+  'image/*': ['.jpeg', '.jpg', '.png', '.webp']
+};
+
+// pH color map with type annotation
+const pHColorMap: pHColor[] = [
   { pH: 0, color: '#ff0000', description: 'Strong acid' },
   { pH: 1, color: '#ff3300', description: 'Very strong acid' },
   { pH: 2, color: '#ff6600', description: 'Strong acid' },
@@ -24,7 +42,7 @@ const pHColorMap = [
 ];
 
 // Common examples for reference
-const pHExamples = [
+const pHExamples: pHExample[] = [
   { pH: 1, example: 'Stomach acid' },
   { pH: 2, example: 'Lemon juice' },
   { pH: 3, example: 'Vinegar' },
@@ -40,21 +58,26 @@ const pHExamples = [
 ];
 
 export default function Home() {
-  const [image, setImage] = useState(null);
-  const [dominantColor, setDominantColor] = useState(null);
-  const [estimatedpH, setEstimatedpH] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [manualColor, setManualColor] = useState('#ffffff');
-  const [manualPH, setManualPH] = useState(null);
-  const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'manual'
+  const [image, setImage] = useState<string | null>(null);
+  const [dominantColor, setDominantColor] = useState<string | null>(null);
+  const [estimatedpH, setEstimatedpH] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [manualColor, setManualColor] = useState<string>('#ffffff');
+  const [manualPH, setManualPH] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'upload' | 'manual'>('upload');
 
-  const onDrop = useCallback((acceptedFiles) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
+    if (fileRejections.length > 0) {
+      console.error('Rejected files:', fileRejections);
+      return;
+    }
+
     const file = acceptedFiles[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        setImage(reader.result);
-        analyzeImage(reader.result);
+        setImage(reader.result as string);
+        analyzeImage(reader.result as string);
         setActiveTab('upload');
       };
       reader.readAsDataURL(file);
@@ -63,11 +86,11 @@ export default function Home() {
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
-    accept: 'image/*',
+    accept: acceptedFileTypes,
     multiple: false,
   });
 
-  const analyzeImage = (imageSrc) => {
+  const analyzeImage = (imageSrc: string) => {
     setIsLoading(true);
     const img = new Image();
     img.src = imageSrc;
@@ -80,15 +103,15 @@ export default function Home() {
     };
   };
 
-  const getDominantColor = (img) => {
-    // Create a canvas to analyze the image
+  const getDominantColor = (img: HTMLImageElement): string => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    if (!ctx) return '#ffffff';
+    
     canvas.width = img.width;
     canvas.height = img.height;
     ctx.drawImage(img, 0, 0, img.width, img.height);
     
-    // Sample pixels from the middle strip area (assuming pH strip is vertical)
     const stripWidth = img.width * 0.3;
     const startX = (img.width - stripWidth) / 2;
     const sampleHeight = img.height * 0.8;
@@ -96,7 +119,6 @@ export default function Home() {
     
     const imageData = ctx.getImageData(startX, startY, stripWidth, sampleHeight).data;
     
-    // Calculate average color
     let r = 0, g = 0, b = 0;
     let count = 0;
     
@@ -114,14 +136,14 @@ export default function Home() {
     return rgbToHex(r, g, b);
   };
 
-  const rgbToHex = (r, g, b) => {
+  const rgbToHex = (r: number, g: number, b: number): string => {
     return '#' + [r, g, b].map(x => {
       const hex = x.toString(16);
       return hex.length === 1 ? '0' + hex : hex;
     }).join('');
   };
 
-  const calculatePH = (color) => {
+  const calculatePH = (color: string): number => {
     // Convert hex to RGB
     const r = parseInt(color.slice(1, 3), 16);
     const g = parseInt(color.slice(3, 5), 16);
@@ -152,17 +174,19 @@ export default function Home() {
     return closestpH;
   };
 
-  const handleManualColorChange = (color) => {
+  const handleManualColorChange = (color: string) => {
     setManualColor(color);
     const pH = calculatePH(color);
     setManualPH(pH);
   };
 
-  const getpHDescription = (pH) => {
+  const getpHDescription = (pH: number | null): string => {
+    if (pH === null) return '';
     return pHColorMap.find(item => item.pH === pH)?.description || '';
   };
 
-  const getpHExample = (pH) => {
+  const getpHExample = (pH: number | null): string => {
+    if (pH === null) return '';
     return pHExamples.find(item => item.pH === pH)?.example || '';
   };
 
